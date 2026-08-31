@@ -47,7 +47,11 @@ USE_WEB_SEARCH = os.environ.get("USE_WEB_SEARCH", "1") == "1"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("aynaru-bot")
-cliente = anthropic.Anthropic()
+_ws_id = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+_anthropic_kw = {}
+if _ws_id:
+    _anthropic_kw["default_headers"] = {"anthropic-workspace-id": _ws_id}
+cliente = anthropic.Anthropic(**_anthropic_kw)
 
 # ------------------------------------------------------------- rotación pilares
 # Semana (índice 0-2) -> día de publicación -> pilar. La semana rota cada 3.
