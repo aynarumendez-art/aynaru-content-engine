@@ -217,21 +217,35 @@ async def cmd_aprobados(update, context):
         await update.message.reply_text("Aún no has guardado nada hoy.")
 
 
+def analizar_fuente(contenido: str) -> str:
+    contenido = contenido.strip()
+    es_url = contenido.lower().startswith(("http://", "https://"))
+    base = ("Extrae hasta 3 ángulos que conecten con los 5 pilares de Aynaru y su "
+            "posicionamiento (le habla al DUEÑO de negocio, no al gremio del diseño). "
+            "Por cada uno: IDEA, PILAR, ÁNGULO PARA AYNARU, FORMATO SUGERIDO. Texto claro, no JSON.")
+    if es_url:
+        prompt = f"Abre y analiza esta fuente: {contenido}\n{base}"
+        resp = _llamar(CONTEXTO_MARCA, prompt, USE_WEB_SEARCH)
+    else:
+        prompt = f"Analiza este texto de una fuente externa:\n\n{contenido}\n\n{base}"
+        resp = _llamar(CONTEXTO_MARCA, prompt, False)
+    return _texto(resp)[:3500] or "Sin resultado."
+
+
 @solo_duena
 async def cmd_fuente(update, context):
-    if not context.args:
-        await update.message.reply_text("Uso: /fuente <link>")
+    contenido = " ".join(context.args).strip() if context.args else ""
+    if not contenido:
+        context.user_data["esperando_fuente"] = True
+        await update.message.reply_text(
+            "Pégame el link o directamente el TEXTO del post o artículo, y te saco los ángulos.")
         return
-    url = context.args[0]
     await update.message.reply_text("Analizando la fuente...")
-    prompt = (f"Analiza esta fuente: {url}\nExtrae hasta 3 ángulos que conecten con los 5 "
-              "pilares de Aynaru y su posicionamiento. Por cada uno: IDEA, PILAR, ÁNGULO "
-              "PARA AYNARU, FORMATO SUGERIDO. Texto claro, no JSON.")
     try:
-        resp = await asyncio.to_thread(_llamar, CONTEXTO_MARCA, prompt, True)
-        await update.message.reply_text(_texto(resp)[:3500] or "Sin resultado.")
+        salida = await asyncio.to_thread(analizar_fuente, contenido)
+        await update.message.reply_text(salida)
     except Exception as e:
-        await update.message.reply_text(f"No pude analizar la fuente: {e}")
+        await update.message.reply_text(f"No pude analizar la fuente: {type(e).__name__}: {e}")
 
 
 # ------------------------------------------------------------- callbacks / edición
@@ -267,6 +281,14 @@ async def on_boton(update, context):
 
 @solo_duena
 async def on_texto(update, context):
+    if context.user_data.pop("esperando_fuente", False):
+        await update.message.reply_text("Analizando la fuente...")
+        try:
+            salida = await asyncio.to_thread(analizar_fuente, update.message.text)
+            await update.message.reply_text(salida)
+        except Exception as e:
+            await update.message.reply_text(f"No pude analizar la fuente: {type(e).__name__}: {e}")
+        return
     bid = context.user_data.get("editando")
     if not bid:
         return
