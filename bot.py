@@ -34,6 +34,23 @@ CONTEXTO_MARCA = (BASE / "marca" / "contexto-marca.md").read_text(encoding="utf-
 _voz = BASE / "marca" / "voz-ejemplos.md"
 if _voz.exists():
     CONTEXTO_MARCA += "\n\n" + _voz.read_text(encoding="utf-8")
+
+PERSONA_CHAT = """
+---
+Eres el socio de contenido de Aynaru: su jefe de contenido personal, por Telegram.
+Hablas con ELLA (no con su cliente), en español, de forma natural, cercana y directa, como
+una conversación real entre dos personas. Nada de sonar a robot ni a formulario.
+- Conversas con fluidez: propones ideas, reaccionas a lo que dice, preguntas lo que falte.
+- Cuando te pida contenido, lo escribes en SU voz respetando TODAS las reglas de marca de
+  arriba (nunca uses la raya larga; apunta al dueño de negocio, no al gremio del diseño;
+  cierra los posts con una pregunta al dueño).
+- Respuestas breves y conversacionales por defecto. Solo te extiendes cuando te pide un
+  borrador completo.
+- Recuerda lo dicho antes en la conversación y dale continuidad.
+- Si te pide el paquete semanal completo, sugiérele el comando /lote.
+"""
+SISTEMA_CHAT = CONTEXTO_MARCA + "\n" + PERSONA_CHAT
+
 APROBADOS = BASE / "aprobados"
 APROBADOS.mkdir(exist_ok=True)
 
@@ -121,6 +138,12 @@ Cada elemento: {{"dia": "lunes|miércoles|viernes", "pilar": "...", "gancho": ".
         return _extraer_json(_texto(resp))
 
 
+def _chat(historial):
+    resp = cliente.messages.create(model=MODEL, max_tokens=1500,
+                                   system=SISTEMA_CHAT, messages=historial)
+    return _texto(resp) or "..."
+
+
 def regenerar_uno(borrador: dict, instrucciones: str):
     prompt = f"""Este es un borrador tuyo ({borrador.get('dia','')}, pilar {borrador.get('pilar')}):
 
@@ -180,8 +203,10 @@ async def cmd_start(update, context):
     await update.message.reply_text(
         "Motor de contenido de Aynaru, listo.\n\n"
         f"Plan de esta semana:\n{plan}\n\n"
-        "Comandos: /lote (genera la semana ahora)  /semana (ver plan)  "
-        "/aprobados  /fuente <link>", parse_mode=ParseMode.MARKDOWN)
+        "Háblame normal: pídeme ideas, un post, o coméntame algo y conversamos.\n\n"
+        "Comandos: /lote (paquete de la semana)  /semana (ver plan)  "
+        "/aprobados  /fuente (analizar un texto o link)",
+        parse_mode=ParseMode.MARKDOWN)
 
 
 @solo_duena
@@ -291,6 +316,7 @@ async def on_texto(update, context):
         return
     bid = context.user_data.get("editando")
     if not bid:
+        await conversar(update, context)
         return
     drafts = context.application.bot_data.setdefault("drafts", {})
     b = drafts.get(bid)
@@ -301,6 +327,28 @@ async def on_texto(update, context):
     nuevo = await asyncio.to_thread(regenerar_uno, b, update.message.text)
     drafts[bid] = nuevo
     await update.message.reply_text(_tarjeta(nuevo), reply_markup=_botones(bid))
+
+
+@solo_duena
+async def conversar(update, context):
+    hist = context.chat_data.setdefault("hist", [])
+    hist.append({"role": "user", "content": update.message.text})
+    if len(hist) > 20:
+        del hist[:-20]
+    while hist and hist[0]["role"] != "user":   # el historial debe empezar en 'user'
+        hist.pop(0)
+    try:
+        await context.bot.send_chat_action(update.effective_chat.id, "typing")
+    except Exception:
+        pass
+    try:
+        respuesta = await asyncio.to_thread(_chat, hist)
+    except Exception as e:
+        hist.pop()                               # deshace el user si falló
+        await update.message.reply_text(f"⚠️ {type(e).__name__}: {e}")
+        return
+    hist.append({"role": "assistant", "content": respuesta})
+    await update.message.reply_text(respuesta)
 
 
 # ----------------------------------------------------------------- job semanal
