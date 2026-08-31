@@ -84,7 +84,7 @@ def _llamar(system: str, prompt: str, con_busqueda: bool, max_tokens: int = 4000
     kwargs = dict(model=MODEL, max_tokens=max_tokens, system=system,
                   messages=[{"role": "user", "content": prompt}])
     if con_busqueda:
-        kwargs["tools"] = [{"type": "web_search_20260209",
+        kwargs["tools"] = [{"type": "web_search_20250305",
                             "name": "web_search", "max_uses": 3}]
     return cliente.messages.create(**kwargs)
 
