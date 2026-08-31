@@ -25,7 +25,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
-    MessageHandler, ContextTypes, filters,
+    MessageHandler, ContextTypes, Defaults, filters,
 )
 
 # ---------------------------------------------------------------- configuración
@@ -282,7 +282,15 @@ async def job_semanal(context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    try:
+        import pytz
+        tzinfo = pytz.timezone(TZ)
+    except Exception:
+        tzinfo = None
+    builder = Application.builder().token(TELEGRAM_TOKEN)
+    if tzinfo is not None:
+        builder = builder.defaults(Defaults(tzinfo=tzinfo))
+    app = builder.build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("lote", cmd_lote))
     app.add_handler(CommandHandler("semana", cmd_semana))
@@ -292,13 +300,9 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_texto))
 
     hh, mm = (int(x) for x in POST_TIME.split(":"))
-    try:
-        from zoneinfo import ZoneInfo
-        hora = dt.time(hour=hh, minute=mm, tzinfo=ZoneInfo(TZ))
-    except Exception:
-        hora = dt.time(hour=hh, minute=mm)
+    # La hora se interpreta en la zona fijada arriba (Defaults tzinfo).
     # Corre cada día a la hora fijada, pero solo actúa los lunes (lote semanal).
-    app.job_queue.run_daily(job_semanal, time=hora)
+    app.job_queue.run_daily(job_semanal, time=dt.time(hour=hh, minute=mm))
     log.info("Bot en marcha. Lote semanal los lunes a las %s (%s).", POST_TIME, TZ)
     app.run_polling()
 
