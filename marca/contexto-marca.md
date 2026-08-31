@@ -117,6 +117,19 @@ Historia real de cliente → la brecha de negocio que revela (preguntas que el d
 responder) → el principio (la marca es función, no estética) → pregunta de cierre al dueño.
 Anti-patrón a evitar: post centrado en el oficio, la técnica o el debate diseño vs IA.
 
+## Estructuras de redacción por red social
+- **LinkedIn:** línea 1 = gancho (afirmación fuerte, dato o pregunta). Párrafos de 1 a 3
+  líneas, con espacio en blanco. Recorrido problema → consecuencia → criterio → cierre con
+  pregunta al dueño. 150 a 300 palabras. Sin hashtags o máximo 3.
+- **Threads:** una sola idea, punzante. Menos de 500 caracteres. Frases cortas. Arranca fuerte
+  y cierra con pregunta o remate.
+- **Instagram (caption):** primera línea = gancho que corta el "ver más". 80 a 150 palabras.
+  Cierra con una acción o una reflexión.
+- **Blog / artículo:** apertura con un problema real → tesis en 1 o 2 frases → 3 a 5 secciones
+  (una idea cada una) → ejemplo o caso concreto → cierre con CTA simple. 800 a 1200 palabras.
+- **Newsletter:** asunto directo (máx 8 palabras) → observación de apertura (2 a 3 líneas) →
+  idea central (300 a 400 palabras) → recurso o pregunta → firma simple.
+
 ## Datos operativos
 - Canales activos: LinkedIn (Creator Mode) y Threads. Podcast Icónica.
 - Objetivo de mezcla de contenido: 70% autoridad / 30% atracción de clientes para ENTE.
