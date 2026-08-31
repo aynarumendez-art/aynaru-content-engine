@@ -109,11 +109,11 @@ Responde SOLO con un array JSON en un bloque ```json, sin texto antes ni despué
 Cada elemento: {{"dia": "lunes|miércoles|viernes", "pilar": "...", "gancho": "...",
 "angulo": "de qué trata en 1 línea", "linkedin": "post completo", "threads": "versión corta"}}"""
     try:
-        resp = _llamar(CONTEXTO_MARCA, prompt, USE_WEB_SEARCH)
+        resp = _llamar(CONTEXTO_MARCA, prompt, USE_WEB_SEARCH, max_tokens=8000)
         return _extraer_json(_texto(resp))
     except Exception as e:                       # p. ej. sin acceso a web_search
         log.warning("Reintento sin búsqueda web: %s", e)
-        resp = _llamar(CONTEXTO_MARCA, prompt, False)
+        resp = _llamar(CONTEXTO_MARCA, prompt, False, max_tokens=8000)
         return _extraer_json(_texto(resp))
 
 
@@ -144,12 +144,12 @@ def solo_duena(func):
 
 
 def _tarjeta(b: dict) -> str:
-    partes = [f"*{b.get('dia','').capitalize()} · {b.get('pilar','')}*",
-              f"_{b.get('angulo','')}_", ""]
+    partes = [f"{b.get('dia','').upper()} · {b.get('pilar','')}",
+              b.get('angulo', ''), ""]
     if b.get("linkedin"):
-        partes += ["*LinkedIn:*", b["linkedin"], ""]
+        partes += ["LinkedIn:", b["linkedin"], ""]
     if b.get("threads"):
-        partes += ["*Threads:*", b["threads"]]
+        partes += ["Threads:", b["threads"]]
     return "\n".join(partes)
 
 
@@ -165,8 +165,7 @@ async def _enviar_lote(bot, chat_id, borradores, store):
     for b in borradores:
         bid = uuid.uuid4().hex[:8]
         store[bid] = b
-        await bot.send_message(chat_id, _tarjeta(b), parse_mode=ParseMode.MARKDOWN,
-                               reply_markup=_botones(bid))
+        await bot.send_message(chat_id, _tarjeta(b), reply_markup=_botones(bid))
 
 
 # --------------------------------------------------------------- comandos bot
@@ -191,7 +190,15 @@ async def cmd_semana(update, context):
 @solo_duena
 async def cmd_lote(update, context):
     await update.message.reply_text("Generando el lote de la semana...")
-    borradores = await asyncio.to_thread(generar_lote_semanal)
+    try:
+        borradores = await asyncio.to_thread(generar_lote_semanal)
+    except Exception as e:
+        log.exception("Error generando lote")
+        await update.message.reply_text(f"⚠️ No pude generar el lote: {type(e).__name__}: {e}")
+        return
+    if not borradores:
+        await update.message.reply_text("No obtuve borradores. Intenta otra vez con /lote.")
+        return
     context.application.bot_data.setdefault("drafts", {})
     await _enviar_lote(context.bot, CHAT_ID, borradores,
                        context.application.bot_data["drafts"])
@@ -267,15 +274,19 @@ async def on_texto(update, context):
     await update.message.reply_text("Reescribiendo...")
     nuevo = await asyncio.to_thread(regenerar_uno, b, update.message.text)
     drafts[bid] = nuevo
-    await update.message.reply_text(_tarjeta(nuevo), parse_mode=ParseMode.MARKDOWN,
-                                    reply_markup=_botones(bid))
+    await update.message.reply_text(_tarjeta(nuevo), reply_markup=_botones(bid))
 
 
 # ----------------------------------------------------------------- job semanal
 async def job_semanal(context: ContextTypes.DEFAULT_TYPE):
     if dt.date.today().weekday() != 0:      # 0 = lunes
         return
-    borradores = await asyncio.to_thread(generar_lote_semanal)
+    try:
+        borradores = await asyncio.to_thread(generar_lote_semanal)
+    except Exception as e:
+        log.exception("Error generando lote semanal")
+        await context.bot.send_message(CHAT_ID, f"⚠️ No pude generar el lote: {type(e).__name__}: {e}")
+        return
     await context.bot.send_message(CHAT_ID, "☀️ Lote de la semana, listo para agendar.")
     await _enviar_lote(context.bot, CHAT_ID, borradores,
                        context.application.bot_data.setdefault("drafts", {}))
@@ -298,6 +309,14 @@ def main():
     app.add_handler(CommandHandler("fuente", cmd_fuente))
     app.add_handler(CallbackQueryHandler(on_boton))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_texto))
+
+    async def on_error(update, context):
+        log.exception("Excepción no controlada", exc_info=context.error)
+        try:
+            await context.bot.send_message(CHAT_ID, f"⚠️ Error interno: {context.error}")
+        except Exception:
+            pass
+    app.add_error_handler(on_error)
 
     hh, mm = (int(x) for x in POST_TIME.split(":"))
     # La hora se interpreta en la zona fijada arriba (Defaults tzinfo).
